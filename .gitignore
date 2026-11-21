@@ -8,3 +8,5 @@ htmlcov/
 *.pyc
 request.json
 usage.jsonl
+async_benchmark_results.json
+scripts/__pycache__/

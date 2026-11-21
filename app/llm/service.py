@@ -6,6 +6,7 @@ from openai import OpenAI
 
 from app.config import get_settings
 from app.llm.cost import calculate_cost
+from app.llm.retry import retry_llm_request
 from app.llm.token_counter import validate_token_budget
 from app.llm.usage_tracker import log_usage
 
@@ -28,6 +29,18 @@ def get_anthropic_client() -> Anthropic:
     )
 
 
+@retry_llm_request
+def create_openai_completion(client, **kwargs):
+    """Create an OpenAI-compatible completion with retries."""
+    return client.chat.completions.create(**kwargs)
+
+
+@retry_llm_request
+def create_anthropic_message(client, **kwargs):
+    """Create an Anthropic-compatible message with retries."""
+    return client.messages.create(**kwargs)
+
+
 def ask_openai(prompt: str) -> dict:
     settings = get_settings()
 
@@ -36,7 +49,8 @@ def ask_openai(prompt: str) -> dict:
 
     client = get_openai_client()
 
-    response = client.chat.completions.create(
+    response = create_openai_completion(
+        client,
         model=settings.openai_model,
         messages=messages,
         max_tokens=settings.max_output_tokens,
@@ -86,7 +100,8 @@ def ask_claude(prompt: str, system: str) -> dict:
 
     client = get_anthropic_client()
 
-    response = client.messages.create(
+    response = create_anthropic_message(
+        client,
         model=settings.anthropic_model,
         system=system,
         messages=messages,
@@ -143,7 +158,8 @@ def stream_openai(prompt: str):
     usage_data = None
     model_name = settings.openai_model
 
-    stream = client.chat.completions.create(
+    stream = create_openai_completion(
+        client,
         model=settings.openai_model,
         messages=messages,
         max_tokens=settings.max_output_tokens,
@@ -164,7 +180,6 @@ def stream_openai(prompt: str):
             if content:
                 yield content
 
-    # Record actual usage reported by Ollama.
     if usage_data is not None:
         cost = calculate_cost(
             "ollama",
@@ -194,7 +209,8 @@ def benchmark_openai(prompt: str) -> dict:
     # Non-streaming benchmark
     start = time.perf_counter()
 
-    response = client.chat.completions.create(
+    response = create_openai_completion(
+        client,
         model=settings.openai_model,
         messages=messages,
         max_tokens=settings.max_output_tokens,
@@ -208,7 +224,8 @@ def benchmark_openai(prompt: str) -> dict:
     first_token_time = None
     streamed_text = ""
 
-    stream = client.chat.completions.create(
+    stream = create_openai_completion(
+        client,
         model=settings.openai_model,
         messages=messages,
         max_tokens=settings.max_output_tokens,
